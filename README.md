@@ -1,1 +1,1 @@
-# Ansible Project - Change Docker Registry URL in Openshift
+# Ansible Project - Openshift - Change base Docker Registry FQDN
