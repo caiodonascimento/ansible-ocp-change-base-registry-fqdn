@@ -1,0 +1,95 @@
+---
+#- name: Make a backup of docker configuration
+#  copy:
+#    src: /etc/sysconfig/docker
+#    dest: /tmp/docker
+#  tags:
+#    - docker-file-configuration
+
+- name: Clean all of duplicates ADD_REGISTRY commented
+  lineinfile:
+    path: /etc/sysconfig/docker
+    state: absent
+    regexp: '^#?ADD_REGISTRY='
+  tags:
+    - docker-file-configuration
+
+- name: Clean all of INSECURE_REGISTRY commented
+  lineinfile:
+    path: /etc/sysconfig/docker
+    state: absent
+    regexp: '^#?INSECURE_REGISTRY='
+  tags:
+    - docker-file-configuration
+
+- name: Clean all of BLOCK_REGISTRY commented
+  lineinfile:
+    path: /etc/sysconfig/docker
+    state: absent
+    regexp: '^#?BLOCK_REGISTRY='
+  tags:
+    - docker-file-configuration
+
+- name: Clean all of OPTIONS commented
+  lineinfile:
+    path: /etc/sysconfig/docker
+    state: absent
+    regexp: '^#?OPTIONS='
+  tags:
+    - docker-file-configuration
+
+- name: Add OPTIONS configuration
+  lineinfile:
+    path: /etc/sysconfig/docker
+    regexp: '^OPTIONS='
+    line: "OPTIONS='--selinux-enabled --log-driver=journald'"
+  tags:
+    - docker-file-configuration
+
+- name: Add satellite registry configuration for a satellite integration
+  lineinfile:
+    path: /etc/sysconfig/docker
+    line: "{{ item }}"
+  with_items:
+    - "INSECURE_REGISTRY='--insecure-registry {{ new_satellite_registry_fqdn }}{{ new_satellite_registry_port }}'"
+    - "ADD_REGISTRY='--add-registry {{ new_satellite_registry_fqdn }}{{ new_satellite_registry_port }}'"
+  when:
+    - new_satellite_registry_fqdn is defined
+    - new_satellite_registry_port is defined
+  tags:
+    - docker-file-configuration
+
+- name: Add registry configuration for a docker registry integration
+  lineinfile:
+    path: /etc/sysconfig/docker
+    line: "{{ item }}"
+  with_items:
+    - "INSECURE_REGISTRY='--insecure-registry {{ new_registry_fqdn }}'"
+    - "ADD_REGISTRY='--add-registry {{ new_registry_fqdn }}'"
+  when: new_registry_fqdn is defined
+  tags:
+    - docker-file-configuration
+
+- name: Add BLOCK_REGISTRY configuration
+  lineinfile:
+    path: /etc/sysconfig/docker
+    line: "BLOCK_REGISTRY='--block-registry registry.access.redhat.com --block-registry docker.io'"
+  tags:
+    - docker-file-configuration
+
+- name: Reload configuration files of docker service
+  shell: systemctl daemon-reload
+  tags:
+    - docker-file-configuration
+
+- name: Fix issue of reload daemon deleting docker sock 
+  file:
+    state: absent
+    path: /var/run/docker.sock
+  tags:
+    - docker-file-configuration
+
+- name: Restart docker daemon
+  service: state=restarted name=docker
+  tags:
+    - docker-file-configuration

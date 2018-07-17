@@ -1,0 +1,1 @@
+# Ansible Project - Change Docker Registry URL in Openshift

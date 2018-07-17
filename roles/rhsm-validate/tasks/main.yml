@@ -1,0 +1,19 @@
+---
+- debug: msg="Linux release is {{ ansible_lsb.description }}"
+
+- name: "Validate if linux release is RHEL"
+  fail: msg="It must be a Red Hat Enterprise Server release"
+  when: ansible_lsb.id != "RedHatEnterpriseServer"
+  tags:
+    - rhsm-validate
+
+- name: "Validate if RHEL version is equal or upper of 7.3 release"
+  fail: msg="Version of RHEL must be equal or upper of 7.3 release"
+  when: ansible_lsb.release | float < min_rhel_version | default(7.3)
+  tags:
+    - rhsm-validate
+
+- name: "Validate if RHEL is subscribed"
+  shell: subscription-manager status
+  tags:
+    - rhsm-validate

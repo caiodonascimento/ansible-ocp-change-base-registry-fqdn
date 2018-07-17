@@ -1,0 +1,3 @@
+# Default params
+min_rhel_version: 7.3
+cleanup_hosts_regexp: satellite

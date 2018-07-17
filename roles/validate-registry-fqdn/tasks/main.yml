@@ -1,0 +1,62 @@
+---
+- name: Validate if is defined a new FQDN for docker registry
+  fail: msg="Must be defined a new FQDN for docker registry. Use new_registry_fqdn for a docker registry or new_satellite_registry_fqdn for a stellite registry"
+  when: 
+    - new_registry_fqdn is undefined
+    - new_satellite_registry_fqdn is undefined
+  tags:
+    - validate-registry-fqdn
+
+- name: Get DNS record for new registry
+  shell: dig {{ new_registry_fqdn }} +short
+  register: registry_ip
+  when: new_registry_fqdn is defined
+  tags:
+    - validate-registry-fqdn
+
+- name: Get DNS record for new satellite registry
+  shell: dig {{ new_satellite_registry_fqdn }} +short
+  register: registry_ip
+  when: new_satellite_registry_fqdn is defined
+  tags:
+    - validate-registry-fqdn
+
+- name: Validate if exixts a DNS record 
+  fail: msg="Not exists a DNS record for FQDN configured. Check params new_registry_fqdn or new_satellite_registry_fqdn, but if not exists a DNS record use new_registry_ip param"
+  when: registry_ip.stdout | ipv4 == False and new_registry_ip is undefined
+  tags:
+    - validate-registry-fqdn
+
+- name: Clean up any satellite record in hosts file
+  lineinfile:
+    backup: yes
+    path: /etc/hosts
+    state: absent
+    regexp: '{{ cleanup_hosts_regexp | default("satellite") }}'
+  when: cleanup_hosts | default(true) | bool
+  tags:
+    - validate-registry-fqdn
+  
+- name: Add record DNS in hosts file for docker registry
+  lineinfile:
+    path: /etc/hosts
+    line: "{{ new_registry_ip }} {{ new_registry_fqdn }}"
+    validate: "/bin/getent hosts {{ new_registry_fqdn }}" 
+  when:
+    - registry_ip == False
+    - new_registry_ip is defined
+    - new_registry_fqdn is defined or new_satellite_registry_fqdn is defined
+  tags:
+    - validate-registry-fqdn
+
+- name: Add record DNS in hosts file for satellite registry
+  lineinfile:
+    path: /etc/hosts
+    line: "{{ new_registry_ip }} {{ new_satellite_registry_fqdn }}"
+    validate: "/bin/getent hosts {{ new_satellite_registry_fqdn }}" 
+  when:
+    - registry_ip == False
+    - new_registry_ip is defined
+    - new_satellite_registry_fqdn is defined
+  tags:
+    - validate-registry-fqdn

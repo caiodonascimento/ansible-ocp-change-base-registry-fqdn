@@ -1,0 +1,105 @@
+---
+# This is a playbook that replaces the registry FQDN used for pull needed imagenes from Openshift.
+- name: Pre-configurations to prepare and change somethings 
+  hosts: nodes
+  tags:
+    - preconfigurations
+  roles:
+    - rhsm-validate
+    - validate-registry-fqdn
+    - docker-file-configuration
+
+- name: Change registry FQDN in OCP cluster
+  hosts: masters[0]
+  tags:
+    - change-in-ocp
+  tasks:
+    - name: Validate connection with OCP Master API Rest
+      uri: url="https://{{openshift_master_cluster_public_hostname}}:{{openshift_master_api_port}}/healthz"
+    
+    - name: Log in OCP Master API Rest
+      shell: oc login -u system:admin
+
+    - name: Clean old temporal files
+      file:
+        state: absent
+        path: "{{ item }}"
+      with_items:
+        - /tmp/openshift-template-export.yaml
+        - /tmp/openshift-is-export.yaml
+
+    - name: Get all template from openshift project
+      shell: oc get template -n openshift -o yaml --export > /tmp/openshift-template-export.yaml
+
+    - name: Get all imagestreams from openshift project
+      shell: oc get is -n openshift -o yaml --export > /tmp/openshift-is-export.yaml
+
+    - name: Change all last registry references to new registry URL in all templates and imagestreams
+      when: new_registry_fqdn is defined
+      block:
+        - name: Validate if last_registry_fqdn is defined
+          fail: msg="The param last_registry_fqdn must be defined."
+          when: last_registry_fqdn is undefined
+        
+        - name: Replace last registry FQDN for new in one in all templates and imagestreams
+          replace:
+            path: "{{ item }}"
+            regexp: "{{ last_registry_fqdn }}"
+            replace: "{{ new_registry_fqdn }}"
+            backup: yes
+          with_items:
+            - "/tmp/openshift-template-export.yaml"
+            - "/tmp/openshift-is-export.yaml"
+
+        - name: Delete all templates and imagestreams to recreate them
+          shell: oc delete template,is --all -n openshift
+
+        - name: Recreate templates and imagestreams that are using the new satellite registry FQDN
+          shell: oc create -f {{ item }} -n openshift
+          with_items:
+            - "/tmp/openshift-template-export.yaml"
+            - "/tmp/openshift-is-export.yaml"
+
+    - name: Change all last satellite references to new registry URL in all templates and imagestreams
+      when: 
+        - new_satellite_registry_fqdn is defined
+        - new_satellite_registry_port is defined
+      block:
+        - name: Validate if last_satellite_registry_fqdn is defined
+          fail: msg="The params last_satellite_registry_fqdn and last_satellite_registry_port must be defined."
+          when: 
+            - last_satellite_registry_fqdn is undefined or last_satellite_registry_port is undefined
+        
+        - name: Validate if last_satellite_organization_and_product and new_satellite_organization_and_product is defined.
+          fail: msg="The params last_satellite_organization_and_product and new_satellite_organization_and_product must be defined."
+          when:
+            - last_satellite_organization_and_product is undefined or new_satellite_organization_and_product is undefined
+
+        - name: Replace last registry FQDN for new in one in all templates and imagestreams
+          replace:
+            path: "{{ item }}"
+            regexp: "{{ last_satellite_registry_fqdn }}{{ last_satellite_registry_port }}"
+            replace: "{{ new_satellite_registry_fqdn }}{{ new_satellite_registry_port }}"
+            backup: yes
+          with_items:
+            - "/tmp/openshift-template-export.yaml"
+            - "/tmp/openshift-is-export.yaml"
+
+        - name: Replace last satellite organization and product in all images URL used in templates and imagestreams
+          replace:
+            path: "{{ item }}"
+            regexp: "{{ last_satellite_organization_and_product }}"
+            replace: "{{ new_satellite_organization_and_product }}"
+            backup: yes
+          with_items:
+            - "/tmp/openshift-template-export.yaml"
+            - "/tmp/openshift-is-export.yaml"
+        
+        - name: Delete all templates and imagestreams to recreate them
+          shell: oc delete template,is --all -n openshift
+
+        - name: Recreate templates and imagestreams that are using the new satellite registry FQDN
+          shell: oc create -f {{ item }} -n openshift
+          with_items:
+            - "/tmp/openshift-template-export.yaml"
+            - "/tmp/openshift-is-export.yaml"
